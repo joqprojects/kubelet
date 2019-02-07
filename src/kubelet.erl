@@ -36,9 +36,8 @@
 
 %% External exports -gen_server functions 
 
--export([start_service/2,
-	 stop_service/2,
-	 upgrade/2,
+-export([start_service/1,
+	 stop_service/1,
 	 loaded_services/0,
 	 my_ip/0,
 	 start_kubelet/0,
@@ -65,10 +64,10 @@ stop()-> gen_server:call(?MODULE, {stop},infinity).
 %% Server functions
 %% ====================================================================
 
-start_service(ServiceId,Vsn)-> 
-    gen_server:call(?MODULE, {start_service,ServiceId,Vsn},infinity).
-stop_service(ServiceId,Vsn)-> 
-    gen_server:call(?MODULE, {stop_service,ServiceId,Vsn},infinity).
+start_service(ServiceId)-> 
+    gen_server:call(?MODULE, {start_service,ServiceId},infinity).
+stop_service(ServiceId)-> 
+    gen_server:call(?MODULE, {stop_service,ServiceId},infinity).
 
 my_ip()-> 
     gen_server:call(?MODULE, {my_ip},infinity).
@@ -77,9 +76,6 @@ loaded_services()->
 
 
 %%-----------------------------------------------------------------------
-upgrade(ServiceId,Vsn)-> 
-    gen_server:cast(?MODULE, {ServiceId,Vsn}).
-
 
 heart_beat()->
     gen_server:cast(?MODULE, {heart_beat}).
@@ -213,7 +209,7 @@ handle_call(Request, From, State) ->
 handle_cast({heart_beat},State) ->
     io:format("heart_beat ~p~n",[{?MODULE,?LINE,time()}]),
     {dns,DnsIp,DnsPort}=State#state.dns_addr,
-   if_dns:cast("controller",latest,{controller,node_register,[State#state.kubelet_info]},{DnsIp,DnsPort}),
+   if_dns:cast("controller",{controller,node_register,[State#state.kubelet_info]},{DnsIp,DnsPort}),
    {noreply,State};
 
 handle_cast({upgrade,_ServiceId,_Vsn}, State) ->

@@ -17,9 +17,6 @@
 -include("include/repository_data.hrl").
 -include("include/loader.hrl").
 %% --------------------------------------------------------------------
--define(NUM_TRIES_START_SERVICE,10).
--define(INTERVAL_START_SERVICE,1000).
-
 
 %% External exports
 -compile(export_all).
@@ -39,17 +36,17 @@
 dns_register(DnsInfo, DnsList) ->
     TimeStamp=erlang:now(),
     NewDnsInfo=DnsInfo#dns_info{time_stamp=TimeStamp},
-    #dns_info{time_stamp=_,ip_addr=IpAddr,port=Port,service_id=ServiceId,vsn=Vsn}=DnsInfo,
+    #dns_info{time_stamp=_,ip_addr=IpAddr,port=Port,service_id=ServiceId}=DnsInfo,
     
-    X1=[X||X<-DnsList,false==({IpAddr,Port,ServiceId,Vsn}==
-				  {X#dns_info.ip_addr,X#dns_info.port,X#dns_info.service_id,X#dns_info.vsn})],
+    X1=[X||X<-DnsList,false==({IpAddr,Port,ServiceId}==
+				  {X#dns_info.ip_addr,X#dns_info.port,X#dns_info.service_id})],
     NewDnsList=[NewDnsInfo|X1],
     NewDnsList.
 
 de_dns_register(DnsInfo,DnsList)->
-    #dns_info{time_stamp=_,ip_addr=IpAddr,port=Port,service_id=ServiceId,vsn=Vsn}=DnsInfo,
-    NewDnsList=[X||X<-DnsList,false==({IpAddr,Port,ServiceId,Vsn}==
-				  {X#dns_info.ip_addr,X#dns_info.port,X#dns_info.service_id,X#dns_info.vsn})],
+    #dns_info{time_stamp=_,ip_addr=IpAddr,port=Port,service_id=ServiceId}=DnsInfo,
+    NewDnsList=[X||X<-DnsList,false==({IpAddr,Port,ServiceId}==
+				  {X#dns_info.ip_addr,X#dns_info.port,X#dns_info.service_id})],
     NewDnsList.
 
 %% --------------------------------------------------------------------
@@ -125,65 +122,10 @@ capabilities()->
 %% Description:
 %% Returns: non
 %% --------------------------------------------------------------------
-load_appfiles(ServiceId,VsnInput,_,_,{DnsIp,DnsPort})->  % VsnInput Can be latest !!!
-    Ebin=case ServiceId of
-	     "lib"->
-		 "lib_ebin";
-	     "kubelet"->
-		 "kubelet_ebin";
-	     "repo"->
-		 "kubelet_ebin";
-	     "catalog"->
-		 "kubelet_ebin";
-	     "controller"->
-		 "kubelet_ebin";
-	     _->
-		 ?SERVICE_EBIN
-      end,   
-    Artifact=if_dns:call("repo",latest,{repo,read_artifact,[ServiceId,VsnInput]},{DnsIp,DnsPort}),
-    #artifact{service_id=ServiceId,
-	      vsn=_Vsn,
-	      appfile={AppFileBaseName,AppBinary},
-	      modules=Modules
-	     }=Artifact,
-    Appfile=filename:join(Ebin,AppFileBaseName),
-    ok=file:write_file(Appfile,AppBinary),
-    [file:write_file(filename:join(Ebin,ModuleName),Bin)||{ModuleName,Bin}<-Modules],
-     {ok,Artifact}.
+
     
 %% --------------------------------------------------------------------
 %% Function: 
 %% Description:
 %% Returns: non
 %% --------------------------------------------------------------------
-load_start(ServiceId)->
-    application:start(list_to_atom(ServiceId)).
-
-upgrade(ServiceId,Vsn,NodeIp,NodePort,{DnsIp,DnsPort})->
-    Artifact=load_appfiles(ServiceId,Vsn,NodeIp,NodePort,{DnsIp,DnsPort}),
-    #artifact{service_id=ServiceId,
-	      vsn=Vsn,
-	      appfile={_AppFileBaseName,_AppBinary},
-	      modules=Modules
-	     }=Artifact,
-    GenServerModule=list_to_atom(ServiceId),  
-    ModulesToPurge=[Module||Module<-Modules,false==(GenServerModule==Module)],
-    update_modules(ModulesToPurge),
-    update_server(GenServerModule),
-    ok.
-
-update_server(GenServerModule)->
-    ok= sys:suspend(GenServerModule),
-    false=code:purge(GenServerModule),
-    {module,GenServerModule}=code:load_file(GenServerModule),
-    ok= sys:change_code(GenServerModule,GenServerModule,"0",[]),
-    sys:resume(GenServerModule).
-
-update_modules([])->
-    ok;
-update_modules([Module|T]) ->
-    code:purge(Module),
-    code:load_file(Module),
-    update_modules(T).
-
-
